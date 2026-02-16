@@ -20,6 +20,7 @@ import { employeeService } from "../../../services/employeeServices";
 import { departmentService } from "../../../services/departmentService";
 import AdminSidebar from "../../../Components/AdminSidebar";
 import { useAuth } from "../../../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 export default function Tasks() {
   const location = useLocation();
@@ -50,6 +51,7 @@ export default function Tasks() {
   });
   const { user } = useAuth();
   const [role, setRole] = useState();
+   const naviagate = useNavigate();
 
   // Department CRUD States
   const [showAddDepartmentModal, setShowAddDepartmentModal] = useState(false);
@@ -113,6 +115,15 @@ export default function Tasks() {
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [role]);
+
+  const shiftToDepartmentEmployeePage = (department) => {
+
+    naviagate("/admin/departmentEmployee", {
+      state:{
+        department: department
+      }
+    })
+  }
 
   useEffect(() => {
     const requestedTab = location.state?.headTab;
@@ -1043,6 +1054,7 @@ export default function Tasks() {
                 return (
                   <div
                     key={dept._id}
+                    onClick={() => shiftToDepartmentEmployeePage(dept.name)}
                     className="group bg-white/95 backdrop-blur rounded-2xl shadow-lg hover:shadow-2xl transition-all p-5 sm:p-6 border border-blue-100 hover:border-blue-300"
                   >
                     <div className="h-1.5 w-full rounded-full bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-400 mb-4 opacity-80"></div>
@@ -1064,7 +1076,10 @@ export default function Tasks() {
                       <div className="flex gap-2 ml-2 flex-shrink-0">
                         <button
                           type="button"
-                          onClick={() => openEditModal(dept)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openEditModal(dept)
+                          }}
                           className="p-2 text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
                           title="Edit Department"
                         >
@@ -1073,7 +1088,10 @@ export default function Tasks() {
 
                         <button
                           type="button"
-                          onClick={() => openDeleteModal(dept)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openDeleteModal(dept)
+                          }}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="Delete Department"
                         >

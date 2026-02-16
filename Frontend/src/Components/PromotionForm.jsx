@@ -148,6 +148,7 @@ const PromotionForm = ({
 
         try {
             await employeeService.employeePromotion(department, formData);
+            window.location.reload();
             onClose();
         } catch (err) {
             console.error("Promotion error:", err);

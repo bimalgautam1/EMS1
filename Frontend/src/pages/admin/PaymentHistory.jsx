@@ -54,22 +54,36 @@ export default function PaymentHistory() {
     }
   };
 
-  const downloadInvoice = async (salaryId) => {
-    try {
-      const apiResponse = await paymentService.DownloadInvoice(salaryId)
-
-      const url = window.URL.createObjectURL(new Blob([apiResponse.data]));
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "invoice.pdf";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (err) {
-      console.log(err)
-      showToast("Failed to download invoice", "error");
+  const downloadInvoice = async (invoiceUrl, invoiceNo) => {
+  try {
+    if (!invoiceUrl) {
+      showToast("Invoice not available", "error");
+      return;
     }
-  };
+
+    const response = await fetch(invoiceUrl);
+    const blob = await response.blob();
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `${invoiceNo}.pdf`; // proper file name
+    document.body.appendChild(link);
+
+    link.click();
+
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+  } catch (error) {
+    console.error(error);
+    showToast("Download failed", "error");
+  }
+};
+
+
+
 
 
   useEffect(() => {
@@ -243,7 +257,7 @@ export default function PaymentHistory() {
                     <td className="px-6 py-4 text-center">
                       {emp.invoice?.invoiceUrl ? (
                         <button
-                          onClick={() => downloadInvoice(emp._id)}
+                          onClick={() => downloadInvoice(emp.invoice?.invoiceUrl, emp.invoice?.invoiceNo)}
                           className="px-3 py-1.5 text-xs font-semibold rounded-lg
                    bg-indigo-600 text-white hover:bg-indigo-700
                    transition shadow"

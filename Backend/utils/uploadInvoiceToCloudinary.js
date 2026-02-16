@@ -1,30 +1,40 @@
 const fs = require("fs");
-const { cloudinary } = require("../config/cloudConfig");
+const supabase = require("../config/supebase.config");
 
-const uploadInvoiceToCloudinary = async (filePath, invoiceNo) => {
+const uploadInvoiceToSupabase = async (filePath, invoiceNo) => {
   try {
     if (!fs.existsSync(filePath)) {
       throw new Error("Invoice PDF file not found");
     }
 
-    const result = await cloudinary.uploader.upload(filePath, {
-      resource_type: "raw",
-      format:"pdf",
-      folder: "invoices",
-      public_id: invoiceNo,
-      use_filename: true,
-      unique_filename: false,
-    });
+    const fileBuffer = fs.readFileSync(filePath);
 
-    // Optional: delete local file
+    // ✅ REMOVE public/ folder
+    const fileName = `${invoiceNo}.pdf`;
+
+    const { data, error } = await supabase.storage
+      .from("invoices")
+      .upload(fileName, fileBuffer, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from("invoices")
+      .getPublicUrl(fileName);
+
     fs.unlinkSync(filePath);
 
-    return result.secure_url; // ✅ STORE THIS IN DB
+    return publicUrlData.publicUrl;
 
   } catch (error) {
-    console.error("Cloudinary Invoice Upload Error:", error);
+    console.error("Supabase Invoice Upload Error:", error);
     throw error;
   }
 };
 
-module.exports = uploadInvoiceToCloudinary;
+module.exports = uploadInvoiceToSupabase;

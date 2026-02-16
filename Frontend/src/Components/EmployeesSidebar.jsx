@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
     MdDashboard,
     MdAccountCircle,
+    MdPeople,
+    MdEventAvailable,
     MdWork,
     MdTaskAlt,
     MdLogout,
@@ -42,6 +44,7 @@ const EmployeesSidebar = () => {
         { icon: <MdWork />, label: "Projects", path: "/employee/projects" },
         { icon: <MdTaskAlt />, label: "My Tasks", path: "/employee/mytasks" },
         { icon: <MdCalendarToday />, label: "Leaves", path: "/employee/apply-leave" },
+        { icon: <MdPeople />, label: "My Payroll", path: "/employee/payroll" },
         { icon: <MdContactSupport />, label: "Support", path: "/employee/support-system" }
     ];
 

@@ -197,8 +197,10 @@ export default function DepartmentHeadProjects() {
         const response = isAdmin
           ? await employeeService.getAllEmployees()
           : await employeeService.getDepartmentHeadEmployees();
+
+          console.log("line-201",response.employees)
         const list = Array.isArray(response?.data) ? response.data : response?.data?.employees || [];
-        setEmployees(list);
+        setEmployees(response.employees);
       } catch (error) {
         console.error("Error fetching employees:", error);
         // Silently ignore 400 errors (department not assigned) - will retry when needed
@@ -226,6 +228,7 @@ export default function DepartmentHeadProjects() {
           // Also try to fetch employees now that we have department
           try {
             const empResponse = await employeeService.getDepartmentHeadEmployees();
+            console.log("line-231", empResponse.employees)
             const list = Array.isArray(empResponse?.data) ? empResponse.data : empResponse?.data?.employees || [];
             setEmployees(list);
           } catch (empError) {
@@ -446,6 +449,7 @@ export default function DepartmentHeadProjects() {
 
   const filteredEmployees = useMemo(() => {
     const query = employeeSearch.toLowerCase();
+    console.log("Filter", employees)
     return employees.filter((employee) => {
       // Filter by department - use selected department from form (for admin) or user's department (for head)
       const employeeDepartment = employee?.department?.name || employee?.department || "";
@@ -462,7 +466,7 @@ export default function DepartmentHeadProjects() {
       const employeeId = (employee?.employeeId || "").toLowerCase();
       return name.includes(query) || employeeId.includes(query);
     });
-  }, [employees, employeeSearch, departmentName, departmentLabel, isAdmin, formState.department]);
+  }, [employees, employeeSearch, departmentName, departmentLabel, formState.department]);
 
   const toggleEmployee = (employee) => {
     const exists = selectedEmployees.some((item) => item._id === employee._id);

@@ -1,7 +1,7 @@
-const https = require("https");
 const mongoose = require("mongoose");
+const https = require("https");
 const Salary = require("../models/Salary");
-const { cloudinary } = require("../config/cloudConfig");
+const supabase = require("../config/supebase.config");
 
 const downloadInvoice = async (req, res) => {
   try {
@@ -16,36 +16,39 @@ const downloadInvoice = async (req, res) => {
       return res.status(404).json({ message: "Invoice not found" });
     }
 
-    console.log(salary.invoice.invoiceNo)
+    const filePath = `public/${salary.invoice.invoiceNo}.pdf`;
 
-    // ✅ FORCE RAW PDF DELIVERY
-    const signedUrl = cloudinary.utils.private_download_url(
-      `invoices/${salary.invoice.invoiceNo}`,
-      "pdf",
-      {
-        resource_type: "raw",
-        type: "authenticated", // IMPORTANT
-      }
-    );
+    // ✅ Generate Signed URL (valid for 60 seconds)
+    const { data, error } = await supabase.storage
+      .from("invoices")
+      .createSignedUrl(filePath, 60);
 
+    if (error) {
+      console.error("Signed URL error:", error);
+      return res.status(500).json({ message: "Failed to generate signed URL" });
+    }
+
+    const signedUrl = data.signedUrl;
+
+    // Set headers
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
       `inline; filename="${salary.invoice.invoiceNo}.pdf"`
     );
 
-    https.get(signedUrl, (cloudRes) => {
-      // 🚨 SAFETY CHECK
-      const contentType = cloudRes.headers["content-type"];
+    // Stream file from Supabase
+    https.get(signedUrl, (supabaseRes) => {
+      const contentType = supabaseRes.headers["content-type"];
 
       if (!contentType || !contentType.includes("pdf")) {
         console.error("❌ Not a PDF:", contentType);
         return res.status(500).json({
-          message: "Cloudinary did not return a PDF",
+          message: "Supabase did not return a PDF",
         });
       }
 
-      cloudRes.pipe(res);
+      supabaseRes.pipe(res);
     }).on("error", (err) => {
       console.error("Stream error:", err.message);
       res.status(500).json({ message: "Failed to stream PDF" });

@@ -171,7 +171,8 @@ const userSchema = new mongoose.Schema({
         type: Date
     },
     AccessKey: {
-        type: String,
+        type: mongoose.Types.ObjectId,
+        ref: "Access_Key",
     },
 
 

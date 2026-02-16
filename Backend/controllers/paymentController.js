@@ -3,6 +3,8 @@ const jwt = require("jsonwebtoken");
 const {status} = require('http-status');
 const dotenv = require("dotenv");
 const Department = require("../models/Department")
+const keyModel = require("../models/key.model");
+const { keyDecrypt } = require("../utils/securityKey");
 
 dotenv.config();
 
@@ -17,7 +19,11 @@ const {secretKey} = req.body;
   })
   }
 
-  if(secretKey === process.env.SECURE_PAYMENT_KEY){
+  const keyDetails = await keyModel.findOne({roleName: "Payment_SecurityKey"})
+
+  const decryptResult = await keyDecrypt(secretKey, keyDetails.keyValue)
+
+  if(decryptResult){
      return res.status(200).json({
     success : true,
     message : "Activate payment mode"

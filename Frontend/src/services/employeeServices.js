@@ -218,15 +218,26 @@ export const employeeService = {
         );
     },
 
-    getProfile: async () => {
-        deleteTask: async (taskId) => {
-            try {
-                const response = await api.delete(`/admin/tasks/${taskId}`);
-                return response.data;
+    // getProfile: async () => {
+    //     deleteTask: async (taskId) => {
+    //         try {
+    //             const response = await api.delete(`/admin/tasks/${taskId}`);
+    //             return response.data;
 
-            } catch (error) {
-                throw error;
-            }
+    //         } catch (error) {
+    //             throw error;
+    //         }
+    //     }
+    // },
+
+    getTasks: async () => {
+
+        try {
+            const response = await api.get(`/employee/tasks`);
+            return response.data;
+
+        } catch (error) {
+            throw error;
         }
     },
 
@@ -351,5 +362,13 @@ export const employeeService = {
             throw error;
         }
     },
+    getDepartmentHeadEmployees: async() => {
+        try {
+            const response = await api.get(`/admin/head/employess`);
+            return response.data;
+        } catch (error) {
+            throw error;
+        }
+    }
 };
 

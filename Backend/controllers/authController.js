@@ -13,6 +13,8 @@ dotenv.config();
 
 
 const crypto = require('crypto');
+const keyModel = require("../models/key.model");
+const { keyDecrypt } = require("../utils/securityKey");
 
 
 // 1. Request Password Reset
@@ -280,7 +282,15 @@ const login = async (req, res, next) => {
         return res.status(403).json({ message: "Admin access key not configured. Contact system administrator" });
       }
 
-      if (currUser.AccessKey !== accessKey) {
+      const accessKeyDetail = await keyModel.findOne({roleName: "Admin"});
+
+      const decryptResult = await keyDecrypt(accessKey, accessKeyDetail.keyValue);
+
+      // if (currUser.AccessKey !== accessKey) {
+      //   return res.status(403).json({ message: "Invalid Admin access key" });
+      // }
+
+      if(!decryptResult){
         return res.status(403).json({ message: "Invalid Admin access key" });
       }
 
@@ -316,8 +326,16 @@ const login = async (req, res, next) => {
         return res.status(403).json({ message: "Department access key not configured. Contact administrator" });
       }
 
-      if (currUser.AccessKey !== accessKey) {
-        return res.status(403).json({ message: "Invalid Department Head access key" });
+      const accessKeyDetail = await keyModel.findOne({roleName: "Department Head"});
+
+      const decryptResult = await keyDecrypt(accessKey, accessKeyDetail.keyValue);
+
+      // if (currUser.AccessKey !== accessKey) {
+      //   return res.status(403).json({ message: "Invalid Department Head access key" });
+      // }
+
+      if(!decryptResult){
+        return res.status(403).json({ message: "Invalid Admin access key" });
       }
 
       const isPasswordValid = await currUser.comparePassword(password);
@@ -462,9 +480,9 @@ const getCurrentUser = async (req, res, next) => {
 
 const register = async (req, res) => {
   try {
-    const { form } = req.body;
+    let { form } = req.body;
 
-    const {
+    let {
       fullName,
       email,
       mobileNumber,
@@ -530,19 +548,36 @@ const register = async (req, res) => {
 
     const employeeId = `EMP-${counter.seq}`;
 
-    const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY;
-    const DEPARTMENT_HEAD_SECRET_KEY =
-      process.env.DEPARTMENT_HEAD_SECRET_KEY;
+    // const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY;
+    // const DEPARTMENT_HEAD_SECRET_KEY =
+    //   process.env.DEPARTMENT_HEAD_SECRET_KEY;
+
+    const adminKeyDetails = await keyModel.findOne({roleName: "Admin"});
+    const departmentHead = await keyModel.findOne({roleName: "Department Head"});
+
+    console.log(adminKeyDetails)
+    console.log(departmentHead);
+
+    const ADMIN_SECRET_KEY = adminKeyDetails._id;
+    const ADMIN_KEY = adminKeyDetails.keyValue;
+    const DEPARTMENT_HEAD_SECRET_KEY = departmentHead._id;
+    const DEPARTMENT_HEAD_KEY = departmentHead.keyValue;
+
+    const decryptAdminResult = await keyDecrypt(secretKey, ADMIN_KEY);
+    const decryptDepartmentHeadResult = await keyDecrypt(secretKey, DEPARTMENT_HEAD_KEY);
 
     let role = "";
 
-    if (registerAs === "Admin" && secretKey === ADMIN_SECRET_KEY) {
+    if (registerAs === "Admin" && decryptAdminResult && !decryptDepartmentHeadResult) {
       role = "Admin";
+      secretKey= ADMIN_SECRET_KEY
     } else if (
       registerAs === "Department Head" &&
-      secretKey === DEPARTMENT_HEAD_SECRET_KEY
+      decryptDepartmentHeadResult && 
+      !decryptAdminResult
     ) {
       role = "Department Head";
+      secretKey= DEPARTMENT_HEAD_SECRET_KEY
     } else {
       return res.status(403).json({
         success: false,
@@ -612,7 +647,6 @@ const register = async (req, res) => {
     });
   }
 };
-
 
 
 const createPassword = async (req, res) => {

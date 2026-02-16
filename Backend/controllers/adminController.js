@@ -17,6 +17,7 @@ const generateInvoicePDF = require("../utils/generateInvoicePDF.js");
 const uploadInvoicePDF = require("../utils/uploadInvoiceToCloudinary.js");
 const cron = require("node-cron");
 const XLSX = require("xlsx");
+const keyModel = require("../models/key.model.js");
 
 const getDashboardstats = async (req, res, next) => {
   try {
@@ -2002,41 +2003,63 @@ const payIndividual = async (req, res) => {
   try {
     const { salaryId } = req.params;
 
+    console.log("Processing Salary ID:", salaryId);
 
     const salary = await Salary.findById(salaryId).populate("employee");
 
     if (!salary) {
-      return res.status(404).json({ success: false, message: "Salary not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Salary not found",
+      });
     }
 
     if (salary.Status === "paid") {
-      return res.status(400).json({ success: false, message: "Already paid" });
+      return res.status(400).json({
+        success: false,
+        message: "Salary already paid",
+      });
     }
 
-    if (!salary.employee.bankDetails?.accountNumber) {
-      return res.status(400).json({ success: false, message: "Bank details missing" });
+    if (!salary.employee?.bankDetails?.accountNumber) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee bank details missing",
+      });
     }
 
+    // 🔹 Generate Invoice Number
     const invoiceNo = await generateInvoiceNo();
 
+    // 🔹 Generate PDF File
     const pdfPath = await generateInvoicePDF(salary, invoiceNo);
 
+    if (!pdfPath) {
+      throw new Error("Invoice PDF generation failed");
+    }
+
+    // 🔹 Upload to Supabase
     const invoiceUrl = await uploadInvoicePDF(pdfPath, invoiceNo);
 
-    console.log("Invoice URL", invoiceUrl)
+    if (!invoiceUrl) {
+      throw new Error("Invoice upload failed");
+    }
 
+    console.log("Invoice URL:", invoiceUrl);
+
+    // 🔹 Update Salary Record
     salary.Status = "paid";
     salary.salaryPayDate = new Date();
     salary.invoice = {
       invoiceNo,
       invoiceDate: new Date(),
-      amount: parseFloat(salary.netSalary),
+      amount: Number(salary.netSalary),
       invoiceUrl,
     };
 
     await salary.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Payment successful & invoice generated",
       data: {
@@ -2046,14 +2069,15 @@ const payIndividual = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({
+    console.error("Pay Individual Error:", error);
+
+    return res.status(500).json({
       success: false,
       message: "Payment failed",
       error: error.message,
     });
   }
-}
+};
 
 
 const getCurrentMonthYear = () => {
@@ -2238,6 +2262,8 @@ const employeePromotion = async (req, res) => {
 
       const promotedEmployee = await User.findById(promotedEmployeeId)
 
+      const keyDetail = await keyModel.findOne({roleName: 'Department Head'})
+
 
       await User.findByIdAndUpdate(
         promotedEmployeeId,
@@ -2246,7 +2272,7 @@ const employeePromotion = async (req, res) => {
           position: "Department Head",
           role: "Department Head",
           email: promotedEmployee.personalEmail,
-          AccessKey: "Head123",
+          AccessKey: keyDetail._id,
           $unset: { email: "" },
           $unset: { personalEmail: "" },
           department: promotedEmployee.department,
@@ -2274,7 +2300,7 @@ const employeePromotion = async (req, res) => {
             department: departmentDetails._id,
             $unset: { position: "" },
             $unset: { email: "" },
-            AccessKey: "",
+            AccessKey: null,
             personalEmail: oldEmployee.email
           },
           { new: true }
@@ -2296,17 +2322,20 @@ const employeePromotion = async (req, res) => {
         );
       }
 
-      const userDetail = User.findById(promotedEmployeeId);
+      const userDetail = await User.findById(promotedEmployeeId);
+
       let email = "";
       let personalEmail = "";
 
+
       if (userDetail.personalEmail) {
         email = userDetail.personalEmail
-        personalEmail = ""
       }
       else {
         email = userDetail.email
       }
+
+      const keyDetail = await keyModel.findOne({roleName: 'Admin'});
 
       await User.findByIdAndUpdate(
         promotedEmployeeId,
@@ -2316,7 +2345,7 @@ const employeePromotion = async (req, res) => {
           reportingManager: "not alloted",
           department: null,
           email: email,
-          AccessKey: "Admin123",
+          AccessKey: keyDetail._id,
           position: "manager",
           personalEmail: personalEmail
         },
@@ -2527,6 +2556,28 @@ const bulkHiring = async (req, res) => {
   }
 };
 
+const getDepartmentHeadEmployees = async (req, res) => {
+  try{
+    const {_id} = req.user;
+
+    const employeeDetail = await User.findById(_id);
+
+    const departmentId = employeeDetail.department;
+
+    const employeeList = await User.find({department: departmentId});
+
+    if(!employeeList){
+      return res.status(401).json({message: "Not Found"});
+    }
+
+    return res.status(200).json({employees: employeeList, message:"Successful"})
+
+  }
+  catch(err){
+    return res.status(500).json({error: err.message})
+  }
+}
+
 
 
 
@@ -2564,5 +2615,6 @@ module.exports = {
   updateEmployeesPermantentSalary,
   // employeePayRollById,
   employeeFilterPayRoll,
-  bulkHiring
+  bulkHiring,
+  getDepartmentHeadEmployees
 }

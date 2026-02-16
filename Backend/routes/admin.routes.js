@@ -37,7 +37,8 @@ const {
     updateEmployeesPermantentSalary,
     employeePayRollById,
     employeeFilterPayRoll,
-    bulkHiring
+    bulkHiring,
+    getDepartmentHeadEmployees
 } = require("../controllers/adminController.js");
 
 const { downloadInvoice } = require("../controllers/downloadInvoice");
@@ -221,5 +222,6 @@ router.route("/bulkHiring").post(uploadFile.single("file"), bulkHiring)
 // Admin management routes
 router.get("/admins", getAllAdmins);
 router.patch("/admins/:id/status", updateAdminStatus);
+router.get("/head/employess", getDepartmentHeadEmployees);
 
 module.exports = router;

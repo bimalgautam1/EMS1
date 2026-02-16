@@ -32,14 +32,14 @@ Backend/node_modules/
 Backend/npm-debug.log*
 Backend/yarn-debug.log*
 Backend/yarn-error.log*
-
+Backend/uploads/
 # --- Django Chat (Python/Django) ---
 django-chat/venv/
 django-chat/env/
-django-chat/__pycache__/
-django-chat/*.pyc
-django-chat/*.pyo
-django-chat/*.pyd
+# --- Python (Global/Recursive) ---
+__pycache__/
+*.py[cod]
+*$py.class
 django-chat/db.sqlite3
 django-chat/db.sqlite3-journal
 django-chat/media/

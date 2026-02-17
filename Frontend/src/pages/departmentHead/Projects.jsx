@@ -82,7 +82,7 @@ export default function DepartmentHeadProjects() {
   const [notice, setNotice] = useState("");
   const [employees, setEmployees] = useState([]);
   const [employeeSearch, setEmployeeSearch] = useState("");
-  const [employeeMenuOpen, setEmployeeMenuOpen] = useState(false);
+  // const [employeeMenuOpen, setEmployeeMenuOpen] = useState(true);
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [leaderId, setLeaderId] = useState("");
   const [loadingEmployees, setLoadingEmployees] = useState(false);
@@ -146,7 +146,7 @@ export default function DepartmentHeadProjects() {
   const engagedEmployeeIds = useMemo(() => {
     const engagementSet = new Set();
     const activeProjects = projects.filter(p => p.status !== "Archived" && p.status !== "Completed");
-    
+
     activeProjects.forEach((project) => {
       if (Array.isArray(project.assignees)) {
         project.assignees.forEach((assignee) => {
@@ -156,7 +156,7 @@ export default function DepartmentHeadProjects() {
         engagementSet.add(project.assignees._id);
       }
     });
-    
+
     return engagementSet;
   }, [projects]);
 
@@ -185,63 +185,48 @@ export default function DepartmentHeadProjects() {
 
   useEffect(() => {
     const fetchEmployees = async () => {
-      // Skip fetching if department selection is required
-      if (requiresDepartmentSelection) {
-        setEmployees([]);
-        return;
-      }
+      // if (requiresDepartmentSelection) {
+      //   setEmployees([]);
+      //   return;
+      // }
 
       setLoadingEmployees(true);
       setEmployeeError("");
+
       try {
         const response = isAdmin
           ? await employeeService.getAllEmployees()
           : await employeeService.getDepartmentHeadEmployees();
 
-          console.log("line-201",response.employees)
-        const list = Array.isArray(response?.data) ? response.data : response?.data?.employees || [];
-        setEmployees(response.employees);
+        console.log("EMPLOYEE RESPONSE:", response);
+
+        // ✅ Universal parsing (handles both cases)
+        const list =
+          Array.isArray(response?.employees)
+            ? response.employees
+            : Array.isArray(response?.data?.employees)
+              ? response.data.employees
+              : Array.isArray(response?.data)
+                ? response.data
+                : [];
+
+        console.log("FINAL EMPLOYEE LIST:", list);
+
+        setEmployees(list);
+
       } catch (error) {
         console.error("Error fetching employees:", error);
-        // Silently ignore 400 errors (department not assigned) - will retry when needed
-        if (error.statusCode !== 400) {
-          console.warn("Note: Department employees will be available once department is confirmed.");
-        }
+        setEmployeeError("Unable to load employees.");
+        setEmployees([]);
       } finally {
         setLoadingEmployees(false);
       }
     };
 
-    // Fetch employees when component mounts or when department selection requirement changes
     fetchEmployees();
-  }, [requiresDepartmentSelection]);
+  }, [ isAdmin]);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (departmentName || departmentOverride) return;
-      try {
-        const response = await employeeService.getProfile();
-        const profile = response?.data || response?.data?.profile || response?.data?.employee;
-        const dept = profile?.department?.name || profile?.department || "";
-        if (dept) {
-          setDepartmentOverride(dept);
-          // Also try to fetch employees now that we have department
-          try {
-            const empResponse = await employeeService.getDepartmentHeadEmployees();
-            console.log("line-231", empResponse.employees)
-            const list = Array.isArray(empResponse?.data) ? empResponse.data : empResponse?.data?.employees || [];
-            setEmployees(list);
-          } catch (empError) {
-            console.warn("Could not pre-fetch employees, will try again when needed.");
-          }
-        }
-      } catch (error) {
-        console.warn("Could not fetch profile, will use default department from projects.");
-      }
-    };
 
-    fetchProfile();
-  }, [departmentName, departmentOverride]);
 
   // Fetch projects from backend
   useEffect(() => {
@@ -249,74 +234,47 @@ export default function DepartmentHeadProjects() {
       setLoadingProjects(true);
       setProjectsError("");
       setRequiresDepartmentSelection(false);
+
       try {
         const response = await projectService.getProjectsByDepartmentHead();
-        
-        // Check if user needs to select a department
+
         if (response?.requiresDepartmentSelection) {
           setRequiresDepartmentSelection(true);
           setAvailableDepartments(response?.data?.availableDepartments || []);
-          setCurrentDepartmentId(null);
           setProjects([]);
-          setLoadingProjects(false);
           return;
         }
-        
-        // Handle new response structure with departmentDetails and departmentEmployees
-        const projectList = response?.data?.projects || (Array.isArray(response?.data) ? response.data : []);
+
+        const projectList =
+          response?.data?.projects ||
+          (Array.isArray(response?.data) ? response.data : []);
+
         const deptDetails = response?.data?.departmentDetails;
-        const deptEmployees = response?.data?.departmentEmployees || [];
-        const available = response?.data?.availableDepartments || [];
-        
-        // Transform backend data to frontend format
-        const transformedProjects = projectList.map(proj => ({
+
+        const transformedProjects = projectList.map((proj) => ({
           ...proj,
           id: proj._id,
-          leader: proj.leaderName || proj.leader?.firstName + ' ' + proj.leader?.lastName || '',
+          leader:
+            proj.leaderName ||
+            `${proj.leader?.firstName || ""} ${proj.leader?.lastName || ""}`.trim(),
           leaderId: proj.leader?._id || proj.leader,
           department: proj.departmentName || deptDetails?.name,
           assignees: proj.assignees || [],
-          dueDate: proj.dueDate?.split('T')[0] || proj.dueDate
+          dueDate: proj.dueDate?.split("T")[0] || proj.dueDate,
         }));
-        
+
         setProjects(transformedProjects);
 
-        if (available.length > 0) {
-          setAvailableDepartments(available);
+        if (deptDetails?.name && !departmentOverride) {
+          setDepartmentOverride(deptDetails.name);
         }
 
-        if (deptEmployees.length > 0) {
-          setEmployees(deptEmployees);
-        }
-
-        // Store available departments
-        if (deptDetails) {
-          setAvailableDepartments([deptDetails]);
-          setCurrentDepartmentId(deptDetails._id);
-          if (deptDetails.name && !departmentOverride) {
-            setDepartmentOverride(deptDetails.name);
-          }
-        }
       } catch (error) {
         console.error("Error fetching projects:", error);
-        
-        // Provide more specific error messages based on status code
-        let errorMsg = "Unable to load projects from server. Please try again later.";
-        const statusCode = error.statusCode;
-        
-        if (statusCode === 403) {
-          errorMsg = error.message || "Access denied. Your account doesn't have the required permissions. Contact admin if you should have access.";
-        } else if (statusCode === 400) {
-          errorMsg = error.message || "Your account setup is incomplete. Contact admin to assign you to a department.";
-        } else if (statusCode === 404) {
-          errorMsg = error.message || "Account not found. Please log in again.";
-        } else if (statusCode === 401) {
-          errorMsg = "Your session has expired. Please log in again.";
-        } else if (error.message) {
-          errorMsg = error.message;
-        }
-        
-        setProjectsError(errorMsg);
+        setProjectsError(
+          error?.message ||
+          "Unable to load projects from server. Please try again."
+        );
         setProjects([]);
       } finally {
         setLoadingProjects(false);
@@ -324,12 +282,12 @@ export default function DepartmentHeadProjects() {
     };
 
     fetchProjects();
-    
-    // Set up polling to refresh projects every 30 seconds
-    const pollInterval = setInterval(fetchProjects, 30000);
-    
-    return () => clearInterval(pollInterval);
+
+    const interval = setInterval(fetchProjects, 30000);
+    return () => clearInterval(interval);
+
   }, [user]);
+
 
   useEffect(() => {
     setPage(1);
@@ -355,19 +313,21 @@ export default function DepartmentHeadProjects() {
 
   const openCreate = () => {
     setModalMode("create");
-    // For admin: don't auto-fill, for department head: auto-fill from department override
     const autoDepartment = isAdmin ? "" : (departmentOverride || availableDepartments[0]?.name || "");
     setFormState({ ...defaultFormState, department: autoDepartment });
     setFormErrors({});
     setSelectedProject(null);
     setSelectedEmployees([]);
     setLeaderId("");
+    // setEmployeeMenuOpen(true);   // ✅ ADD THIS
     setModalOpen(true);
   };
+
 
   const openEdit = (project) => {
     setModalMode("edit");
     setSelectedProject(project);
+
     setFormState({
       name: project.name,
       description: project.description,
@@ -377,17 +337,21 @@ export default function DepartmentHeadProjects() {
       dueDate: project.dueDate,
       priority: project.priority,
     });
+
     setSelectedEmployees(project?.assignees || []);
     setLeaderId(project?.leaderId || "");
     setFormErrors({});
+
+    // setEmployeeMenuOpen(true); // ✅ IMPORTANT
     setModalOpen(true);
   };
+
 
   const openView = async (project) => {
     setModalMode("view");
     setSelectedProject(project);
     setModalOpen(true);
-    
+
     // Fetch updates for this project
     if (!projectUpdates[project.id]) {
       setLoadingUpdates((prev) => ({ ...prev, [project.id]: true }));
@@ -406,7 +370,7 @@ export default function DepartmentHeadProjects() {
   const closeModal = () => {
     setModalOpen(false);
     setSelectedProject(null);
-    setEmployeeMenuOpen(false);
+    // setEmployeeMenuOpen(false);
   };
 
   const handleAssignDepartment = async () => {
@@ -419,7 +383,7 @@ export default function DepartmentHeadProjects() {
     try {
       await projectService.assignDepartmentToHead(selectedDepartmentForAssignment);
       setNoticeMessage("Department assigned successfully! Reloading page...");
-      
+
       // Reload page after 1.5 seconds to refresh JWT token and all data
       setTimeout(() => {
         window.location.reload();
@@ -448,25 +412,19 @@ export default function DepartmentHeadProjects() {
   }, [leaderId, selectedEmployees]);
 
   const filteredEmployees = useMemo(() => {
-    const query = employeeSearch.toLowerCase();
-    console.log("Filter", employees)
+    const query = employeeSearch.trim().toLowerCase();
+
     return employees.filter((employee) => {
-      // Filter by department - use selected department from form (for admin) or user's department (for head)
-      const employeeDepartment = employee?.department?.name || employee?.department || "";
-      // For admin in create/edit mode, use the selected department from form. Otherwise use user's department
-      const currentDept = (isAdmin && formState.department) ? formState.department : (departmentName || departmentLabel);
-      
-      // Only include if department matches
-      if (employeeDepartment && currentDept && employeeDepartment !== currentDept) {
-        return false;
-      }
-      
-      // Then filter by search query
       const name = getEmployeeLabel(employee).toLowerCase();
       const employeeId = (employee?.employeeId || "").toLowerCase();
+
       return name.includes(query) || employeeId.includes(query);
     });
-  }, [employees, employeeSearch, departmentName, departmentLabel, formState.department]);
+  }, [employees, employeeSearch]);
+
+
+
+
 
   const toggleEmployee = (employee) => {
     const exists = selectedEmployees.some((item) => item._id === employee._id);
@@ -503,7 +461,7 @@ export default function DepartmentHeadProjects() {
 
     const selectedLeader = selectedEmployees.find((item) => item._id === leaderId);
     const leaderName = selectedLeader ? getEmployeeLabel(selectedLeader) : formState.leader.trim();
-    
+
     // For Admin: find department ID from availableDepartments by name
     // For Department Head: use currentDepartmentId
     let deptId;
@@ -513,12 +471,12 @@ export default function DepartmentHeadProjects() {
     } else {
       deptId = currentDepartmentId || availableDepartments[0]?._id;
     }
-    
+
     if (!deptId) {
       setFormErrors({ department: "Department ID not available. Please refresh the page." });
       return;
     }
-    
+
     const projectData = {
       name: formState.name.trim(),
       description: formState.description.trim(),
@@ -537,24 +495,24 @@ export default function DepartmentHeadProjects() {
       if (modalMode === "edit") {
         const response = await projectService.updateProject(selectedProject._id, projectData);
         const updatedProject = response?.data;
-        
-        setProjects((prev) => prev.map((item) => 
-          item.id === selectedProject.id 
-            ? { 
-                ...item,
-                ...updatedProject,
-                id: updatedProject._id,
-                leader: updatedProject.leaderName,
-                leaderId: updatedProject.leader,
-                department: updatedProject.departmentName
-              }
+
+        setProjects((prev) => prev.map((item) =>
+          item.id === selectedProject.id
+            ? {
+              ...item,
+              ...updatedProject,
+              id: updatedProject._id,
+              leader: updatedProject.leaderName,
+              leaderId: updatedProject.leader,
+              department: updatedProject.departmentName
+            }
             : item
         ));
         setNoticeMessage("Project updated successfully.");
       } else {
         const response = await projectService.createProject(projectData);
         const newProject = response?.data;
-        
+
         const formattedProject = {
           ...newProject,
           id: newProject._id,
@@ -563,7 +521,7 @@ export default function DepartmentHeadProjects() {
           department: newProject.departmentName,
           dueDate: newProject.dueDate?.split('T')[0] || newProject.dueDate
         };
-        
+
         setProjects((prev) => [formattedProject, ...prev]);
         setNoticeMessage("Project created successfully.");
       }
@@ -785,7 +743,7 @@ export default function DepartmentHeadProjects() {
                   <div className="flex-1">
                     <h3 className="text-sm font-semibold text-blue-900">Select Your Department</h3>
                     <p className="mt-2 text-sm text-blue-700">Your account needs to be associated with a department. Select one from the dropdown below.</p>
-                    
+
                     <div className="mt-4">
                       <label className="text-xs font-semibold uppercase tracking-wide text-blue-600">Department</label>
                       <select
@@ -802,7 +760,7 @@ export default function DepartmentHeadProjects() {
                         ))}
                       </select>
                     </div>
-                    
+
                     <div className="mt-4 flex flex-wrap gap-3">
                       <button
                         type="button"
@@ -1061,7 +1019,7 @@ export default function DepartmentHeadProjects() {
                           </p>
                         </div>
                       </div>
-                      
+
                       {/* Status and Priority Badges */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <StatusBadge value={project.status} />
@@ -1284,8 +1242,8 @@ export default function DepartmentHeadProjects() {
                           )}
                         </div>
                         <span className="text-xs text-slate-400 whitespace-nowrap">
-                          {new Date(update.createdAt).toLocaleDateString('en-US', { 
-                            month: 'short', 
+                          {new Date(update.createdAt).toLocaleDateString('en-US', {
+                            month: 'short',
                             day: 'numeric',
                             hour: '2-digit',
                             minute: '2-digit'
@@ -1308,7 +1266,7 @@ export default function DepartmentHeadProjects() {
                 <FileText className="w-5 h-5 text-blue-600" />
                 <h3 className="text-sm font-semibold text-slate-900">Project Details</h3>
               </div>
-              
+
               {/* Project Name */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600 mb-2">
@@ -1476,10 +1434,10 @@ export default function DepartmentHeadProjects() {
                     placeholder="Search by name or employee ID..."
                     value={employeeSearch}
                     onChange={(event) => setEmployeeSearch(event.target.value)}
-                    onFocus={() => setEmployeeMenuOpen(true)}
+                    // onFocus={() => setEmployeeMenuOpen(true)}
                     className="flex-1 bg-transparent text-sm placeholder-slate-400 focus:outline-none"
                   />
-                  {employeeMenuOpen && (
+                  {/* {employeeMenuOpen && (
                     <button
                       type="button"
                       onClick={() => setEmployeeMenuOpen(false)}
@@ -1487,9 +1445,11 @@ export default function DepartmentHeadProjects() {
                     >
                       Close
                     </button>
-                  )}
+                  )} */}
                 </div>
 
+                {/* Loading State */}
+                {/* Loading */}
                 {/* Loading State */}
                 {loadingEmployees && (
                   <div className="px-4 py-6 text-center">
@@ -1509,79 +1469,84 @@ export default function DepartmentHeadProjects() {
                 )}
 
                 {/* Employee List */}
-                {employeeMenuOpen && !loadingEmployees && !employeeError && (
+                {!loadingEmployees && !employeeError && (
                   <div className="max-h-72 overflow-y-auto">
-                    {employees.length === 0 ? (
+                    {loadingEmployees ? (
+                      <div className="px-4 py-6 text-center">
+                        <div className="inline-flex h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-purple-600 mb-2"></div>
+                        <p className="text-xs text-slate-500">Loading employees...</p>
+                      </div>
+                    ) : employees.length === 0 ? (
                       <div className="px-4 py-8 text-center">
                         <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                        <p className="text-sm text-slate-600 font-medium">No employees found</p>
-                        <p className="text-xs text-slate-500 mt-1">Contact admin to add employees to your department.</p>
+                        <p className="text-sm text-slate-600 font-medium">
+                          No employees found
+                        </p>
                       </div>
                     ) : filteredEmployees.length === 0 ? (
                       <div className="px-4 py-6 text-center">
-                        <p className="text-xs text-slate-500">No employees match "{employeeSearch}"</p>
+                        <p className="text-xs text-slate-500">
+                          No employees match "{employeeSearch}"
+                        </p>
                         <button
                           type="button"
                           onClick={() => setEmployeeSearch("")}
-                          className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700 transition"
+                          className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700"
                         >
                           Clear search
                         </button>
                       </div>
                     ) : (
-                      <>
-                        <div className="sticky top-0 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-600 border-b border-slate-200 z-10">
-                          {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''} available
-                        </div>
-                        {filteredEmployees.map((employee, index) => {
-                          const isSelected = selectedEmployees.some((item) => item._id === employee._id);
-                          const isEngaged = engagedEmployeeIds.has(employee._id);
-                          return (
-                            <label
-                              key={employee._id}
-                              className={`flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-sm transition ${
-                                isSelected 
-                                  ? "bg-purple-50 border-l-2 border-purple-600" 
-                                  : isEngaged
-                                  ? "bg-amber-50/60 border-l border-amber-200"
-                                  : index % 2 === 0 ? "bg-white" : "bg-slate-50"
+                      filteredEmployees.map((employee, index) => {
+                        const isSelected = selectedEmployees.some(
+                          (item) => item._id === employee._id
+                        );
+
+                        return (
+                          <label
+                            key={employee._id}
+                            className={`flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-sm transition ${isSelected
+                              ? "bg-purple-50 border-l-2 border-purple-600"
+                              : index % 2 === 0
+                                ? "bg-white"
+                                : "bg-slate-50"
                               } ${index > 0 ? "border-t border-slate-100" : ""} hover:bg-purple-50/50`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => toggleEmployee(employee)}
-                                className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-2 focus:ring-purple-500 cursor-pointer"
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div className="text-slate-900 font-medium truncate">
-                                  {getEmployeeLabel(employee)}
-                                </div>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  {employee?.employeeId && (
-                                    <div className="text-xs text-slate-500">ID: {employee.employeeId}</div>
-                                  )}
-                                  {isEngaged && (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                                      <AlertTriangle className="w-3 h-3" />
-                                      Engaged
-                                    </span>
-                                  )}
-                                </div>
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleEmployee(employee)}
+                              className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                            />
+
+                            <div className="flex-1 min-w-0">
+                              <div className="text-slate-900 font-medium truncate">
+                                {getEmployeeLabel(employee)}
                               </div>
-                              {isSelected && (
-                                <CheckCircle2 className="w-4 h-4 text-purple-600 flex-shrink-0" />
+
+                              {employee?.employeeId && (
+                                <div className="text-xs text-slate-500">
+                                  ID: {employee.employeeId}
+                                </div>
                               )}
-                            </label>
-                          );
-                        })}
-                      </>
+                            </div>
+
+                            {isSelected && (
+                              <CheckCircle2 className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                            )}
+                          </label>
+                        );
+                      })
                     )}
+
                   </div>
                 )}
 
+
+
+
                 {/* Selected Members Display */}
-                {selectedEmployees.length > 0 && !employeeMenuOpen && (
+                {selectedEmployees.length > 0 && (
                   <div className="p-4 bg-purple-50 border-t border-purple-200">
                     <p className="text-xs font-semibold text-purple-700 mb-3 flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4" />
@@ -1607,6 +1572,7 @@ export default function DepartmentHeadProjects() {
                     </div>
                   </div>
                 )}
+
               </div>
               {formErrors.assignees && <p className="mt-2 text-xs text-rose-500 font-medium">{formErrors.assignees}</p>}
             </div>

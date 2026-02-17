@@ -190,9 +190,9 @@ const createEmployee = async (req, res, next) => {
       position,
       gender,
       dob,
-      reportingManager: departmentInfo?.manager
-        ? `${departmentInfo.manager.firstName} ${departmentInfo.manager.lastName}`
-        : "NOT ALLOTED",
+      // reportingManager: departmentInfo?.manager
+      //   ? `${departmentInfo.manager.firstName} ${departmentInfo.manager.lastName}`
+      //   : "NOT ALLOTED",
       joiningDate: joinningDate,
       jobType,
       baseSalary: baseSalary || 0,
@@ -2298,7 +2298,7 @@ const employeePromotion = async (req, res) => {
             taxApply: Number(newSalary.taxApply),
             netSalary: Number(newSalary.netSalary),
             department: departmentDetails._id,
-            $unset: { position: "" },
+            position: oldEmployeeNewPosition || "",
             $unset: { email: "" },
             AccessKey: null,
             personalEmail: oldEmployee.email

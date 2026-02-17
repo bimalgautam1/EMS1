@@ -258,43 +258,86 @@ const uploadTaskFile = async (req, res) => {
     });
   }
 };
+
 const getProfile = async (req, res) => {
   try {
-    const id = req.user.id;
+    const userId = req.user._id;
 
-    const profile = await User.findById(id)
-      .populate({
-        path: "department",
-        select: "name description",
-        populate: {
-          path: "manager",
-          select: "firstName lastName"
+    const profile = await User.aggregate([
+      {
+        $match: { _id: userId }
+      },
+      {
+        $lookup: {
+          from: "departments",
+          localField: "department",
+          foreignField: "_id",
+          as: "department"
         }
-      })
-      .select("-password"); // remove password
+      },
+      {
+        $unwind: {
+          path: "$department",
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "department.manager",
+          foreignField: "_id",
+          as: "manager"
+        }
+      },
+      {
+        $unwind: {
+          path: "$manager",
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $project: {
+          password: 0,
+          "manager.password": 0,
+          "manager.bankDetails": 0,
+          "manager.leaveBalance": 0
+        }
+      }
+    ]);
 
-    if (!profile) {
-      return res.status(400).json({
+    if (!profile.length) {
+      return res.status(404).json({
         success: false,
-        message: "No employee with this id"
+        message: "User not found"
       });
     }
 
     return res.status(200).json({
       success: true,
-      data: profile
+      employee: {
+        _id: profile[0]._id,
+        firstName: profile[0].firstName,
+        lastName: profile[0].lastName,
+        email: profile[0].email,
+        role: profile[0].role,
+        contactNumber: profile[0].contactNumber,
+        personalEmail: profile[0].personalEmail,
+        position: profile[0].position,
+        joiningDate: profile[0].joiningDate,
+        jobType: profile[0].jobType,
+        status: profile[0].status
+      },
+      department: profile[0].department,
+      manager: profile[0].manager
     });
 
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Server Error"
     });
   }
 };
-
-
-
 
 const getAppliedLeave = async (req, res) => {
   try {

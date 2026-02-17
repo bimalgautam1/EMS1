@@ -14,15 +14,22 @@ export default function MyProfile() {
         try {
             const result = await employeeService.getProfile();
             console.log(result);
+
             if (result.success) {
-                setProfileData(result.data);
+                setProfileData({
+                    ...result.employee,
+                    department: result.department,
+                    manager: result.manager
+                });
             }
+
         } catch (err) {
             console.log("fetch profile err", err);
         } finally {
             setLoading(false);
         }
     };
+
 
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
@@ -71,7 +78,7 @@ export default function MyProfile() {
     return (
         <div className="flex min-h-screen bg-gray-100">
             <EmployeesSidebar />
-            
+
             <div className="flex-1 w-full ml-0 lg:ml-64">
                 <div className="p-6 lg:p-10 max-w-7xl mx-auto">
                     {/* Page Header */}
@@ -89,15 +96,15 @@ export default function MyProfile() {
                         {/* Decorative Background Elements */}
                         <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl transform translate-x-32 -translate-y-32 animate-pulse"></div>
                         <div className="absolute bottom-0 left-0 w-72 h-72 bg-blue-900/20 rounded-full blur-2xl transform -translate-x-20 translate-y-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
-                        
+
                         <div className="relative z-10 p-8">
                             <div className="flex flex-col lg:flex-row items-start gap-8">
                                 {/* Profile Avatar */}
                                 <div className="relative group">
                                     <div className="w-40 h-40 rounded-full border-4 border-white shadow-2xl overflow-hidden bg-white ring-4 ring-white/30 transition-all duration-300 group-hover:scale-105">
                                         {profileData.profilePhoto?.url ? (
-                                            <img 
-                                                src={profileData.profilePhoto.url} 
+                                            <img
+                                                src={profileData.profilePhoto.url}
                                                 alt={`${profileData.firstName} ${profileData.lastName}`}
                                                 className="w-full h-full object-cover"
                                             />
@@ -113,7 +120,7 @@ export default function MyProfile() {
                                         <div className="w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-lg relative"></div>
                                     </div>
                                 </div>
-                                
+
                                 {/* Profile Info */}
                                 <div className="flex-1 text-left">
                                     <div className="mb-6">
@@ -138,7 +145,7 @@ export default function MyProfile() {
                                             </span>
                                         </div>
                                     </div>
-                                    
+
                                     {/* Stats Bar */}
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                         <div className="relative overflow-hidden group h-full">
@@ -183,9 +190,9 @@ export default function MyProfile() {
                                             <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-white/30 rounded-xl"></div>
                                             <div className="relative p-6 bg-white/15 backdrop-blur-md rounded-xl border border-white/30 hover:bg-white/20 hover:scale-105 transition-all duration-300 shadow-xl h-full flex flex-col justify-center">
                                                 <p className="text-5xl font-extrabold text-white drop-shadow-2xl mb-3">
-                                                    {(profileData.leaveBalance?.annual || 0) + 
-                                                     (profileData.leaveBalance?.sick || 0) + 
-                                                     (profileData.leaveBalance?.personal || 0)}
+                                                    {(profileData.leaveBalance?.annual || 0) +
+                                                        (profileData.leaveBalance?.sick || 0) +
+                                                        (profileData.leaveBalance?.personal || 0)}
                                                 </p>
                                                 <p className="text-white font-bold text-sm uppercase tracking-wider">Days</p>
                                                 <p className="text-white/90 text-xs font-medium mt-1">Total Available Leave</p>
@@ -225,7 +232,7 @@ export default function MyProfile() {
                                                     <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
                                                     <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
                                                 </svg>
-                                                <span className="text-gray-900 font-medium break-all">{profileData.personalEmail}</span>
+                                                <span className="text-gray-900 font-medium break-all">{profileData.personalEmail || "Not provided"}</span>
                                             </div>
                                         </div>
                                         <div>
@@ -310,7 +317,7 @@ export default function MyProfile() {
                                                 Reporting Manager
                                             </label>
                                             <div className="p-4 bg-gradient-to-br from-gray-50 to-blue-50/30 rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all duration-300">
-                                                <p className="text-gray-900 font-semibold">{`${profileData.department.manager?.firstName || ""} ${profileData.department.manager?.lastName || ""}` || 'Not assigned'}</p>
+                                                <p className="text-gray-900 font-semibold">{profileData.manager ? `${profileData.manager.firstName} ${profileData.manager.lastName}` : "Not assigned"}</p>
                                             </div>
                                         </div>
                                         <div>

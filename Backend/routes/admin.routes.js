@@ -222,6 +222,6 @@ router.route("/bulkHiring").post(uploadFile.single("file"), bulkHiring)
 // Admin management routes
 router.get("/admins", getAllAdmins);
 router.patch("/admins/:id/status", updateAdminStatus);
-router.get("/head/employess", getDepartmentHeadEmployees);
+router.get("/head/employess", protect, authorize('Department Head'), getDepartmentHeadEmployees);
 
 module.exports = router;

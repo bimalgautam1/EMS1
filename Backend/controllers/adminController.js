@@ -770,6 +770,11 @@ const createDepartment = async (req, res) => {
 
     const departmentInfo = await department.save();
 
+    // Update the manager's department field in User collection
+    if (manager) {
+      await User.findByIdAndUpdate(manager, { department: departmentInfo._id });
+    }
+
     // Populate manager details for response
     await department.populate('manager', 'firstName lastName email employeeId');
 
@@ -932,6 +937,22 @@ const updateDepartment = async (req, res) => {
         { $set: { reportingManager: newManagerFullName } }
       );
 
+      // Update the new manager's department field in User collection
+      if (manager && manager !== existingDept.manager?.toString()) {
+        await User.findByIdAndUpdate(manager, { department: id });
+      }
+
+      // Clear the old manager's department field if manager was removed or changed
+      if (existingDept.manager) {
+        const oldManagerId = existingDept.manager.toString();
+        const newManagerId = manager ? manager.toString() : null;
+        
+        // If manager was changed (different from old) or removed, clear old manager's department
+        if (newManagerId !== oldManagerId) {
+          await User.findByIdAndUpdate(oldManagerId, { department: null });
+        }
+      }
+
       console.log(`Updated reporting manager to "${newManagerFullName}" for all employees in ${updatedDepartment.name}`);
     }
 
@@ -980,7 +1001,12 @@ const getAllEmployees = async (req, res) => {
 
     // Department filter
     if (department && department !== 'all') {
-      filter.department = { $regex: new RegExp(department, 'i') };
+      if (department === 'none' || department === 'unassigned') {
+        // Filter employees without a department
+        filter.department = { $in: [null, undefined, ""] };
+      } else {
+        filter.department = { $regex: new RegExp(department, 'i') };
+      }
     }
 
     // Status filter
@@ -994,7 +1020,7 @@ const getAllEmployees = async (req, res) => {
     // Pagination
     const skip = (page - 1) * limit;
 
-    // Execute query
+    // Execute query - exclude Department Heads, only return regular employees
     filter.role = 'employee';
     const employees = await User.find(filter)
       .select('-__v')
@@ -1890,17 +1916,33 @@ const getDepartmentTasks = async (req, res) => {
     let departmentDetails;
     let departmentEmployees;
     let departmentTasks;
-    if (req.user.role === "Admin" || req.user.role === "Department Head") {
+    if (req.user.role === "Admin") {
       departmentDetails = await Department.find({}).populate("manager", "firstName lastName");
       departmentEmployees = await User.find({
         role: { $in: ["employee", "Department Head"] }
       });
-    } else {
-      departmentDetails = await Department.findOne({
-        manager: new mongoose.Types.ObjectId(id)
-      }).populate("manager", "firstName lastName");
-      departmentEmployees = await User.find({ department: departmentDetails._id });
-
+    } else if (req.user.role === "Department Head") {
+      // Use department from user profile directly (more reliable than manager field)
+      const userDepartmentId = req.user.department;
+      
+      if (!userDepartmentId) {
+        // Fallback: try to find department by manager
+        departmentDetails = await Department.findOne({
+          manager: new mongoose.Types.ObjectId(id)
+        }).populate("manager", "firstName lastName");
+      } else {
+        departmentDetails = await Department.findById(userDepartmentId).populate("manager", "firstName lastName");
+      }
+      
+      if (departmentDetails) {
+        departmentEmployees = await User.find({ 
+          department: departmentDetails._id,
+          _id: { $ne: req.user._id },
+          role: "employee"  // Only show employees, not other department heads
+        });
+      } else {
+        departmentEmployees = [];
+      }
     }
 
     if (!departmentDetails) {
@@ -2566,22 +2608,63 @@ const bulkHiring = async (req, res) => {
 
 const getDepartmentHeadEmployees = async (req, res) => {
   try{
-    const {_id} = req.user;
+    // Use req.user directly from auth middleware - it's already populated
+    const currentUser = req.user;
+    
+    console.log("DEBUG: currentUser role:", currentUser.role);
+    console.log("DEBUG: currentUser department:", currentUser.department);
+    console.log("DEBUG: currentUser departmentId:", currentUser.departmentId);
+    
+    if (!currentUser) {
+      return res.status(401).json({ message: "User not authenticated" });
+    }
 
-    const employeeDetail = await User.findById(_id);
+    if (currentUser.role !== 'Department Head') {
+      return res.status(403).json({ message: "Access denied. Only department heads can access this route." });
+    }
 
-    const departmentId = employeeDetail.department;
+    // Try to get department ID from user.department or find via Department.manager
+    let departmentId = currentUser.department || currentUser.departmentId;
+    
+    // If not found, try to find via the Department collection
+    if (!departmentId) {
+      const managedDept = await Department.findOne({ manager: currentUser._id });
+      if (managedDept) {
+        departmentId = managedDept._id;
+      }
+    }
 
-    const employeeList = await User.find({department: departmentId});
+    if (!departmentId) {
+      return res.status(400).json({ 
+        message: "Department not assigned to user. Please contact admin.",
+        debug: {
+          hasDepartment: !!currentUser.department,
+          hasDepartmentId: !!currentUser.departmentId,
+          userId: currentUser._id
+        }
+      });
+    }
+
+    console.log("DEBUG: Querying for department:", departmentId);
+    
+    // Find all regular employees in the same department, excluding department heads
+    const employeeList = await User.find({ 
+      department: departmentId,
+      role: 'employee',  // Only regular employees, not department heads
+      _id: { $ne: currentUser._id }  // Exclude the current department head
+    });
+
+    console.log("DEBUG: Found employees count:", employeeList.length);
 
     if(!employeeList){
-      return res.status(401).json({message: "Not Found"});
+      return res.status(404).json({message: "No employees found in this department"});
     }
 
     return res.status(200).json({employees: employeeList, message:"Successful"})
 
   }
   catch(err){
+    console.log("DEBUG: Error:", err);
     return res.status(500).json({error: err.message})
   }
 }

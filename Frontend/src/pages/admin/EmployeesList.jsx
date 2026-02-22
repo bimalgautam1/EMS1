@@ -4,9 +4,12 @@ import { useNavigate } from "react-router-dom";
 import AdminSidebar from "../../Components/AdminSidebar.jsx";
 import { employeeService } from "../../services/employeeServices.js";
 import { capitalize } from "../../utils/helper.js";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function EmployeesList() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "Admin";
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -17,15 +20,59 @@ export default function EmployeesList() {
   useEffect(() => {
     fetchDepartments();
     fetchEmployees();
-  }, []);
+    // For Department Heads, fetch their department info
+    if (!isAdmin) {
+      fetchDepartmentHeadInfo();
+    }
+  }, [user]);
+
+  const fetchDepartmentHeadInfo = async () => {
+    try {
+      // Fetch current user profile from backend to get department info
+      const result = await employeeService.getProfile();
+      console.log("DEBUG: User profile response:", result);
+      
+      if (result && result.data && result.data.department) {
+        const userDept = result.data.department;
+        console.log("DEBUG: Department from backend:", userDept);
+        setDepartments([{ _id: userDept._id, name: userDept.name }]);
+        
+        // Update user in localStorage with the populated department
+        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+        const updatedUser = {
+          ...currentUser,
+          department: { _id: userDept._id, name: userDept.name }
+        };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        
+        // Update the user in AuthContext
+        if (result.data) {
+          const { user: authUser } = useAuth?.() || {};
+          // Force re-render by updating a local state that triggers update
+        }
+      } else {
+        setDepartments([]);
+      }
+    } catch (error) {
+      console.error("Error fetching department head info:", error);
+      setDepartments([]);
+    }
+  };
 
   const fetchEmployees = async () => {
     try {
       setLoading(true);
-      const result = await employeeService.getAllEmployees();
-      if (result && result.data) {
-        setEmployees(result.data);
-      }
+      // Use different API based on user role
+      const result = isAdmin 
+        ? await employeeService.getAllEmployees()
+        : await employeeService.getDepartmentHeadEmployees();
+      
+      // Parse response based on API used
+      const employeeData = isAdmin 
+        ? (result?.data || [])
+        : (result?.employees || []);
+      
+      setEmployees(employeeData);
       setLoading(false);
     } catch (error) {
       console.error("Error:", error);
@@ -61,9 +108,9 @@ export default function EmployeesList() {
       );
 
     const matchesDept =
-      departmentFilter === "all" ||
-      (employee.department?.name?.toLowerCase() || "") ===
-      departmentFilter.toLowerCase();
+      isAdmin ? (departmentFilter === "all" || 
+        (departmentFilter === "none" ? !employee.department : 
+          (employee.department?.name?.toLowerCase() || "") === departmentFilter.toLowerCase())) : true; // Department heads already get filtered employees from API
 
     const matchesStatus =
       statusFilter === "all" ||
@@ -145,18 +192,28 @@ export default function EmployeesList() {
 
               {/* Filters */}
               <div className="flex flex-col sm:flex-row gap-3">
-                <select
-                  value={departmentFilter}
-                  onChange={(e) => setDepartmentFilter(e.target.value)}
-                  className="px-4 py-3 border border-gray-200 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex-1 bg-white shadow-sm"
-                >
-                  <option value="all">All Departments</option>
-                  {departments.map((dept) => (
-                    <option key={dept._id} value={dept.name}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </select>
+                {/* Only show department dropdown for Admins */}
+                {isAdmin ? (
+                  <select
+                    value={departmentFilter}
+                    onChange={(e) => setDepartmentFilter(e.target.value)}
+                    className="px-4 py-3 border border-gray-200 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex-1 bg-white shadow-sm"
+                  >
+                    <option value="all">All Departments</option>
+                    <option value="none">No Department</option>
+                    {departments.map((dept) => (
+                      <option key={dept._id} value={dept.name}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : user?.role === "Department Head" ? (
+                  // For Department Head, show their department as read-only
+                  <div className="px-4 py-3 border border-gray-200 rounded-xl text-gray-900 text-sm flex-1 bg-gray-50">
+                    <span className="font-semibold">Department: </span>
+                    {departments.length > 0 ? departments[0].name : (user?.department?.name || user?.department || "Not Assigned")}
+                  </div>
+                ) : null}
 
                 <select
                   value={statusFilter}

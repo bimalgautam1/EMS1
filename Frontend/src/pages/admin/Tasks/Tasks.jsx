@@ -272,6 +272,11 @@ export default function Tasks() {
       if (result && result.success) {
         showToast("Task deleted successfully!", "success");
 
+        // Update headTasks (used by Department Head view)
+        setHeadTasks((prev) =>
+          prev.filter((task) => (task._id || task.id) !== taskId)
+        );
+
         setSelectedEmployee((prev) =>
           prev
             ? {

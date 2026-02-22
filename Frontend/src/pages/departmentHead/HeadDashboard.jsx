@@ -58,13 +58,8 @@ const HeadDashboard = () => {
     if (!user?._id && !user?.id) return;
     try {
       const id = user._id || user.id;
-      const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-      const CHAT_BASE_URL = isLocal ? "http://127.0.0.1:8000" : "https://employee-management-system-chat-feature.onrender.com";
-      const token = localStorage.getItem("token");
-      const res = await axios.get(
-        `${CHAT_BASE_URL}/api/chat/unread/total/${id}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      // UPDATED URL
+      const res = await axios.get(`https://employee-management-system-chat-feature.onrender.com/api/chat/unread/total/${id}`);
       setUnreadCount(res.data.count);
     } catch (e) { console.error(e); }
   };
@@ -75,9 +70,8 @@ const HeadDashboard = () => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-    const WS_BASE_URL = isLocal ? "ws://127.0.0.1:8000" : "wss://employee-management-system-chat-feature.onrender.com";
-    const ws = new WebSocket(`${WS_BASE_URL}/ws/chat/?token=${token}`);
+    // UPDATED URL (wss://)
+    const ws = new WebSocket(`wss://employee-management-system-chat-feature.onrender.com/ws/chat/?token=${token}`);
     socketRef.current = ws;
 
     ws.onmessage = (event) => {
@@ -177,12 +171,6 @@ const HeadDashboard = () => {
 
     // Fetch data immediately
     fetchDepartmentData();
-
-    // Set up real-time polling - refresh every 15 seconds
-    const intervalId = setInterval(fetchDepartmentData, 15000);
-
-    // Cleanup interval on component unmount
-    return () => clearInterval(intervalId);
   }, [user?.department, user?.departmentId]);
 
   // Manual refresh handler
@@ -459,10 +447,10 @@ const HeadDashboard = () => {
             {/* Task Bar Chart */}
             {taskStats.totalTasks > 0 ? (
               <div>
-                <ResponsiveContainer width="100%" height={260}>
+                <ResponsiveContainer width="100%" height={300}>
                   <BarChart
                     data={taskStats.chartData}
-                    margin={{ top: 20, right: 30, left: 0, bottom: 60 }}
+                    margin={{ top: 20, right: 30, left: 0, bottom: 80 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis 
@@ -470,7 +458,7 @@ const HeadDashboard = () => {
                       tick={{ fill: "#64748b", fontSize: 12 }}
                       angle={-45}
                       textAnchor="end"
-                      height={80}
+                      height={100}
                     />
                     <YAxis 
                       tick={{ fill: "#64748b", fontSize: 12 }}

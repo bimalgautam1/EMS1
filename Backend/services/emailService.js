@@ -442,8 +442,10 @@ const sendSalaryReceiptEmail = async (salaryData, pdfBuffer) => {
 // Verify email configuration
 const verifyEmailConfig = async () => {
   try {
-    await transporter.verify();
-    console.log('Email server is ready to send messages');
+    if (!process.env.BREVO_API_KEY) {
+      throw new Error("BREVO_API_KEY is missing in .env");
+    }
+    console.log('Brevo Email configuration looks good (API Key is present).');
     return true;
   } catch (error) {
     console.error('Email configuration error:', error);
